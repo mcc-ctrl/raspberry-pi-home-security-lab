@@ -230,3 +230,255 @@ Planned areas include:
 * Establishing a security baseline
 
 The lab will then be expanded into a practical environment for cybersecurity experimentation and defensive monitoring.
+
+
+## Stage 6: Linux System Hardening
+
+The next stage of the project focused on establishing a basic security baseline for the Raspberry Pi and reducing unnecessary network exposure.
+
+The approach used throughout this stage was:
+
+**Observe → Identify → Assess → Change → Verify**
+
+Rather than immediately disabling services or changing configuration, the system was first inspected to understand what was running and why.
+
+---
+
+### 6.1 Listening Port Enumeration
+
+The Raspberry Pi's listening network sockets were inspected using:
+
+```bash
+ss -tuln
+```
+
+A more detailed enumeration was then performed using:
+
+```bash
+sudo ss -tulpn
+```
+
+This identified the processes responsible for the listening services.
+
+The initial results included:
+
+* **TCP 22** - SSH
+* **TCP/UDP 111** - `rpcbind`
+* **UDP 5353** - Avahi/mDNS
+* **TCP 631** - CUPS, bound only to localhost
+
+This provided an initial view of the Raspberry Pi's network attack surface.
+
+---
+
+### 6.2 Running Service Enumeration
+
+The running system services were reviewed using:
+
+```bash
+systemctl list-units --type=service --state=running
+```
+
+Several services were identified, including:
+
+* SSH
+* NetworkManager
+* Avahi
+* Bluetooth
+* CUPS
+* `rpcbind`
+* NFS-related services
+* System logging and authentication services
+
+The purpose of this review was to distinguish between services required for the current lab and services that could potentially increase the attack surface.
+
+---
+
+### 6.3 Investigating NFS and RPC Services
+
+The installed packages were investigated after identifying `rpcbind` listening on port 111:
+
+```bash
+dpkg -l | grep -E 'nfs|rpcbind'
+```
+
+This identified NFS-related packages and `rpcbind`.
+
+An attempt was made to remove the packages using:
+
+```bash
+sudo apt remove nfs-common rpcbind
+```
+
+However, the package manager proposed removing additional desktop-related packages.
+
+The operation was cancelled rather than blindly accepting the proposed changes.
+
+This highlighted an important system administration principle:
+
+> Package dependencies should be understood before removing system components.
+
+The packages were therefore left installed, while the unnecessary services were disabled instead.
+
+---
+
+### 6.4 Disabling Unnecessary Services
+
+The NFS block mapping service was disabled:
+
+```bash
+sudo systemctl disable --now nfs-blkmap.service
+```
+
+The RPC binding service was then disabled:
+
+```bash
+sudo systemctl disable --now rpcbind.service
+```
+
+The associated socket was also disabled:
+
+```bash
+sudo systemctl disable --now rpcbind.socket
+```
+
+The listening ports were then checked again:
+
+```bash
+sudo ss -tulpn
+```
+
+Port **111**, previously associated with `rpcbind`, was no longer listening.
+
+This provided verification that the change had successfully reduced the Raspberry Pi's network exposure.
+
+---
+
+### 6.5 Reviewing Localhost Services
+
+Port 631 was identified as belonging to CUPS.
+
+The service was found to be listening only on:
+
+```text
+127.0.0.1
+[::1]
+```
+
+This means the service was bound to the local system rather than exposed directly to other devices on the network.
+
+It was therefore left enabled rather than unnecessarily removing it.
+
+This reinforced the principle that a service should be assessed based on its actual exposure and purpose before being disabled.
+
+---
+
+### 6.6 SSH Key Authentication
+
+SSH was then hardened by moving from password authentication to public-key authentication.
+
+An Ed25519 key pair was generated on the Windows administration machine:
+
+```powershell
+ssh-keygen
+```
+
+The public key was installed on the Raspberry Pi in:
+
+```text
+~/.ssh/authorized_keys
+```
+
+The SSH connection was then tested from a new PowerShell session.
+
+The Raspberry Pi successfully authenticated using the private key and its associated passphrase.
+
+The private key remains stored on the administration machine and is **not included in this repository**.
+
+---
+
+### 6.7 Disabling SSH Password Authentication
+
+Once key-based authentication had been successfully verified, SSH password authentication was disabled.
+
+The SSH configuration was edited using:
+
+```bash
+sudo nano /etc/ssh/sshd_config
+```
+
+The following configuration was applied:
+
+```text
+PasswordAuthentication no
+```
+
+Before applying the configuration, the SSH daemon configuration was validated:
+
+```bash
+sudo sshd -t
+```
+
+No errors were returned.
+
+The SSH service was then reloaded:
+
+```bash
+sudo systemctl reload ssh
+```
+
+A new SSH connection was established successfully using the Ed25519 key.
+
+This confirmed that SSH remained accessible after password authentication was disabled.
+
+---
+
+### 6.8 Security Improvements
+
+The changes made during this stage resulted in several improvements to the Raspberry Pi's security posture:
+
+* Unnecessary NFS-related functionality was disabled
+* `rpcbind` was disabled
+* TCP/UDP port 111 was removed from the exposed listening services
+* SSH public-key authentication was configured
+* SSH password authentication was disabled
+* SSH configuration was validated before being reloaded
+* Changes were independently verified after implementation
+* The system was changed incrementally to reduce the risk of losing remote access
+
+The current SSH access model therefore requires possession of the configured private key and its passphrase rather than relying on a traditional account password.
+
+---
+
+### 6.9 Lessons Learned
+
+This stage demonstrated that system hardening is not simply a matter of disabling as many services as possible.
+
+The process involved:
+
+1. Identifying what was running
+2. Understanding why it was running
+3. Assessing whether it was required
+4. Making the smallest appropriate change
+5. Testing the result
+6. Confirming that legitimate administration still worked
+
+The failed package removal attempt was also useful practical experience. It demonstrated how Linux package dependencies can affect apparently simple security changes and why changes should be reviewed before being applied.
+
+---
+
+## Next Stage
+
+The next stage will focus on **host-based firewall configuration**.
+
+Planned work includes:
+
+* Installing UFW
+* Creating an SSH allow rule
+* Enabling the firewall safely
+* Verifying firewall status and rules
+* Rechecking listening ports
+* Testing SSH connectivity after firewall activation
+* Documenting the resulting security baseline
+
+The goal is to establish a simple defensive firewall policy while maintaining remote administrative access.
