@@ -482,3 +482,189 @@ Planned work includes:
 * Documenting the resulting security baseline
 
 The goal is to establish a simple defensive firewall policy while maintaining remote administrative access.
+
+## Stage 7: Host-Based Firewall Configuration
+
+The next stage of the project focused on implementing a host-based firewall on the Raspberry Pi.
+
+The objective was to restrict unsolicited inbound network traffic while maintaining the SSH access required for remote administration.
+
+UFW (Uncomplicated Firewall) was selected because it provides a straightforward interface for configuring the Linux firewall while still using the underlying netfilter framework.
+
+---
+
+### 7.1 Installing UFW
+
+UFW was installed using:
+
+```bash id="j7j4pd"
+sudo apt install ufw
+```
+
+The installation completed successfully.
+
+UFW was initially left disabled so that the firewall rules could be configured and reviewed before activation.
+
+---
+
+### 7.2 Configuring SSH Access
+
+Because the Raspberry Pi is administered remotely over SSH, an SSH allow rule was created before enabling the firewall:
+
+```bash id="b1m2k3"
+sudo ufw allow ssh
+```
+
+UFW confirmed that rules were added for both IPv4 and IPv6.
+
+The firewall status was then checked:
+
+```bash id="c4d5e6"
+sudo ufw status
+```
+
+The result showed:
+
+```text id="f7g8h9"
+Status: inactive
+```
+
+This confirmed that the SSH rule had been configured while the firewall remained disabled.
+
+---
+
+### 7.3 Enabling the Firewall
+
+Once SSH access had been explicitly permitted, UFW was enabled:
+
+```bash id="i1j2k3"
+sudo ufw enable
+```
+
+The firewall was then inspected using:
+
+```bash id="l4m5n6"
+sudo ufw status verbose
+```
+
+The resulting configuration was:
+
+```text id="o7p8q9"
+Status: active
+Logging: on (low)
+Default: deny (incoming), allow (outgoing), disabled (routed)
+
+To                         Action      From
+--                         ------      ----
+22/tcp                     ALLOW IN    Anywhere
+22/tcp (v6)                ALLOW IN    Anywhere (v6)
+```
+
+This establishes a default-deny policy for incoming traffic while allowing normal outbound connections.
+
+SSH access is explicitly permitted over TCP port 22 for both IPv4 and IPv6.
+
+---
+
+### 7.4 Verifying Remote Administration
+
+A new SSH connection was established from the Windows administration machine after enabling UFW:
+
+```powershell id="r1s2t3"
+ssh mcctrl@ccmm-GITS001.local
+```
+
+Key-based authentication successfully completed using the configured Ed25519 SSH key.
+
+This confirmed that enabling the firewall had not disrupted legitimate remote administration.
+
+Maintaining the existing SSH session while performing this test provided an additional safeguard against accidental loss of access.
+
+---
+
+### 7.5 Final Network Exposure Check
+
+The listening network sockets were checked again using:
+
+```bash id="u4v5w6"
+sudo ss -tulpn
+```
+
+The final listening services identified were:
+
+```text id="x7y8z9"
+TCP 22     SSH
+UDP 5353   Avahi/mDNS
+```
+
+The previously identified `rpcbind` listener on port 111 was no longer present following the service hardening performed during Stage 6.
+
+SSH remained available on both IPv4 and IPv6:
+
+```text id="a1b2c3"
+0.0.0.0:22
+[::]:22
+```
+
+Avahi remained active for local network discovery:
+
+```text id="d4e5f6"
+0.0.0.0:5353
+*:5353
+```
+
+---
+
+### 7.6 Security Improvements
+
+The Raspberry Pi now has a basic host-based firewall policy providing the following protections:
+
+* UFW is enabled and active
+* Incoming traffic is denied by default
+* Outgoing traffic is allowed by default
+* SSH access is explicitly permitted
+* IPv4 and IPv6 SSH access are both configured
+* Firewall logging is enabled at a low level
+* Existing SSH administration was tested after firewall activation
+* Network listening services were re-enumerated after the change
+
+Combined with the service hardening performed during Stage 6, the Raspberry Pi now has a significantly smaller and more controlled network attack surface.
+
+---
+
+### 7.7 Lessons Learned
+
+This stage demonstrated the importance of configuring firewall rules before enabling the firewall itself.
+
+Because the Raspberry Pi is administered remotely, enabling a firewall without first permitting SSH could have resulted in the loss of remote access.
+
+The process followed was:
+
+1. Install the firewall
+2. Configure the required SSH rule
+3. Confirm the rule was present
+4. Enable the firewall
+5. Establish a new SSH connection
+6. Re-enumerate listening services
+7. Verify the final configuration
+
+This provided practical experience with host-based network access control and the importance of verifying security changes after implementation.
+
+---
+
+## Next Stage
+
+The next stage of the project will focus on **security monitoring and log analysis**.
+
+Planned work includes:
+
+* Reviewing SSH authentication logs
+* Understanding Linux security-related log entries
+* Monitoring failed authentication attempts
+* Generating controlled security events
+* Investigating the resulting logs
+* Establishing a basic security monitoring workflow
+* Documenting findings as incident-style reports
+
+The goal is to move from simply hardening the system to actively monitoring and investigating security events occurring on the host.
+
